@@ -130,11 +130,11 @@
 			event.id = idx; 
 		}
 
-		newEventList.splice(0,0,null); // all RPG maker event lists start with null for some reason
-
 		for(var i =0;i<newEventList.length;i++) {
 			newEventList[i] = JSON.stringify(newEventList[i])
 		}
+
+		newEventList.splice(0,0,null); // all RPG maker event lists start with null for some reason
 
 		json.events = [];
 		return newEventList
