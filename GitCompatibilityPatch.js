@@ -3,18 +3,18 @@
 //=============================================================================
 
 /*:
- * @plugindesc Automatically formats JSON files and manages the event table when the game is launched in playtest mode.
+ * @plugindesc Formats RPG maker files when the game is run in playtest mode to allow them to be auto merged in most cases.
  * @author Marcus Der
  * 
  * @param Format All
- * @desc Format JSON outside of the data directory?
+ * @desc Formats JSON outside of the data directory.
  * @type boolean
  * @on Yes
  * @off No
  * @default false
  * 
  * @param Debug
- * @desc Print debug messages?
+ * @desc Prints debug messages.
  * @type boolean
  * @on Yes
  * @off No
@@ -25,8 +25,14 @@
  * @type boolean
  * @on Yes
  * @off No
- * @default true   
+ * @default true    
  * 
+ * @param Expand Map Groups
+ * @desc Whether or not to default map groups to expanded or collapsed. Does nothing if Remove RPG Maker Data is false.
+ * @type boolean
+ * @on Yes
+ * @off No
+ * @default true   
  * 
  * @param Manage Events
  * @desc Manages the event table to allow multiple users to work on events on the same map.
@@ -36,11 +42,27 @@
  * @default true   
  *
  * @help This plugin alters files on the hard drive every time the game is run.
- * Saving RPG maker will reset all the changes that this plugin makes,
- * so remember to always run a playtest right before closing RPG maker!
+ * It does NOT extend the editor's functionality, as a result
+ * saving RPG maker will reset all the changes that this plugin makes.
+ * Always run a playtest right before closing RPG maker to keep the changes!
+ * 
+ * Be aware that event id numbers are changed by this plugin when
+ * Manage Events is enabled.
+ * 
  */
 (function() {
+
+	var parameters = PluginManager.parameters("GitCompatibilityPatch");
+    var formatAll = parameters["Format All"] === 'true';
+    var debug = parameters["Debug"] === 'true';
+    var removeRPG = parameters["Remove RPG Maker Data"] === 'true';
+    var expandMapGroups = parameters["Expand Map Groups"] === 'true';
+    var manageEvents = parameters["Manage Events"] === 'true';
+
 	if(!Utils.isOptionValid('test')) {
+		if(debug) {
+			console.log("Test mode inactive. GitCompatabilityPatch will not run.")
+		}
 		return; // do nothing if it's not test
 	}
 
@@ -55,12 +77,6 @@
 	const jsonIndentSpaces = 2;
 
 	const blacklist = [".git"];
-
-	var parameters = PluginManager.parameters("GitCompatibilityPatch");
-    var formatAll = parameters["Format All"] === 'true';
-    var debug = parameters["Debug"] === 'true';
-    var removeRPG = parameters["Remove RPG Maker Data"] === 'true';
-    var manageEvents = parameters["Manage Events"] === 'true';
 
 	const systemReplacer = function(key, value) {
 		if(key === "versionId") {
@@ -78,7 +94,7 @@
 			return 0;
 		}
 		if(key === "expanded") {
-			return false;
+			return expandMapGroups;
 		}
 		return value;
 	}
@@ -112,7 +128,7 @@
 		// the list to actually be written
 		var newEventList = [];
 
-		for(var i =0;i<json.width*json.height;i++) {
+		for(var i =0;i<json.width*json.height + 1;i++) {
 			newEventList.push(null)
 		}
 
@@ -125,7 +141,7 @@
 		}
 
 		for(const event of eventBuffer) {
-			const idx = event.y * json.width + event.x
+			const idx = event.y * json.width + event.x + 1
 			newEventList[idx] = event;
 			event.id = idx; 
 		}
@@ -133,8 +149,6 @@
 		for(var i =0;i<newEventList.length;i++) {
 			newEventList[i] = JSON.stringify(newEventList[i])
 		}
-
-		newEventList.splice(0,0,null); // all RPG maker event lists start with null for some reason
 
 		json.events = [];
 		return newEventList
