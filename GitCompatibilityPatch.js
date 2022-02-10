@@ -52,10 +52,6 @@
 	const fs = require('fs');
 	const path = require('path');
 
-
-	const eventBufferSize = 100; // this is the max amount of events you can add to RPG maker before you have to restart
-	const warningThreshold = 0.9;
-
 	const jsonIndentSpaces = 2;
 
 	const blacklist = [".git"];
@@ -65,10 +61,6 @@
     var debug = parameters["Debug"] === 'true';
     var removeRPG = parameters["Remove RPG Maker Data"] === 'true';
     var manageEvents = parameters["Manage Events"] === 'true';
-	var maxUsers = Number(parameters["Max Users"]);
-	var _maxUsers = -1;
-
-	var userId = -1;
 
 	const systemReplacer = function(key, value) {
 		if(key === "versionId") {
@@ -120,10 +112,6 @@
 		// the list to actually be written
 		var newEventList = [];
 
-		for(var i =0;i<eventBufferSize;i++) {
-			newEventList.push(null);
-		}
-
 		for(var i =0;i<json.width*json.height;i++) {
 			newEventList.push(null)
 		}
@@ -137,7 +125,7 @@
 		}
 
 		for(const event of eventBuffer) {
-			const idx = eventBufferSize + event.y * json.width + event.x
+			const idx = event.y * json.width + event.x
 			newEventList[idx] = event;
 			event.id = idx; 
 		}
