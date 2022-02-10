@@ -38,10 +38,6 @@
  * @help This plugin alters files on the hard drive every time the game is run.
  * Saving RPG maker will reset all the changes that this plugin makes,
  * so remember to always run a playtest right before closing RPG maker!
- * 
- * Additionally, this plugin uses a buffer of 100 events per map per user.
- * This buffer is flushed every time RPG maker is closed. You will be
- * warned if you approach the buffer limit
  */
 (function() {
 	if(!Utils.isOptionValid('test')) {
@@ -138,11 +134,6 @@
 			if(json.events[i]!==null) {
 				eventBuffer.push(json.events[i]);
 			}
-		}
-
-		if(eventBuffer.length !== 0 && eventBuffer[eventBuffer.length -1].id >= eventBufferSize * warningThreshold) {
-			alert("Approaching max buffer size! ("+Math.round(eventBuffer[eventBuffer.length -1].id / eventBufferSize * 100)+"% full)"
-			+ "\nPlease restart RPG maker to allow the formatter to commit changes.")
 		}
 
 		for(const event of eventBuffer) {
