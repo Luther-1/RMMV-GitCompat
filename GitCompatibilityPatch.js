@@ -33,20 +33,15 @@
  * @type boolean
  * @on Yes
  * @off No
- * @default true  
- * 
- * @param Max Users
- * @desc The maximum amount of users that will be using the this plugin. This value can be updated later.
- * @default 3  
+ * @default true   
  *
- * @help Each user must provide a unique ID number to identify them.
- * You will be prompted on first launch to input one.
- * Make sure no one in the team has the same ID.
+ * @help This plugin alters files on the hard drive every time the game is run.
+ * Saving RPG maker will reset all the changes that this plugin makes,
+ * so remember to always run a playtest right before closing RPG maker!
  * 
- * This plugin relies on a gitignore to be set up to
- * exclude the .mvgitcompat file from the root directory.
- * If the git repository is in the project's root directory,
- * the plugin will automatically set this part up.
+ * Additionally, this plugin uses a buffer of 100 events per map per user.
+ * This buffer is flushed every time RPG maker is closed. You will be
+ * warned if you approach the buffer limit
  */
 (function() {
 	if(!Utils.isOptionValid('test')) {
@@ -61,12 +56,6 @@
 	const fs = require('fs');
 	const path = require('path');
 
-	const gitignorePath = "./.gitignore"
-	const gitpath = "./.git"
-	const identifierFilename = ".mvgitcompat"
-	const identifierPath = "./" + identifierFilename
-	const sharedDataFilename = ".mvgitcompatdata"
-	const sharedDataPath = "./" + sharedDataFilename
 
 	const eventBufferSize = 100; // this is the max amount of events you can add to RPG maker before you have to restart
 	const warningThreshold = 0.9;
@@ -126,51 +115,6 @@
 		return null;
 	}
 
-	let rewriteEventTable = function(events, oldMax, newMax) {
-		var userIndex = userId-1;
-		if(oldMax > newMax) {
-			// map all existing events into an array
-			eventMap = []
-			for(var i=0;i<newMax;i++) {
-				eventMap.push([]);
-			}
-			for(var i=eventBufferSize + 1;i<events.length;i+=oldMax) {
-				for(var k=0;k<oldMax;k++) {
-					if(k<newMax) {
-						eventMap[k].push(events[i+k]);
-					} else {
-						if(events[i+k] !== null) {
-							eventMap[userIndex].push(events[i+k]);
-						}
-					}
-				}
-			}
-
-			// remove all events from old event list
-			events.splice(eventBufferSize + 1,events.length - eventBufferSize - 1);
-
-			// add the events from the array back to the main event list
-			var largest = 0;
-			for(var i =0;i<newMax;i++) {
-				largest = Math.max(largest, eventMap[i].length);
-			}
-
-			for(var i =0;i<largest;i++) {
-				for(var k=0;k<newMax;k++) {
-					events.push(i < eventMap[k].length ? eventMap[k][i] : null);
-				}
-			}
-		} else {
-			var diff = newMax-oldMax;
-			for(var i = eventBufferSize + 1 + oldMax;i<= events.length;i+=oldMax + diff) {
-				for(var k=0;k<diff;k++) {
-					events.splice(i,0,null);
-				}
-			}
-		}
-		
-	}
-
 	let preprocessMap = function(filepath, json) {
 		filename = path.basename(filepath);
 		if(!isMap(filename)) {
@@ -184,17 +128,16 @@
 			newEventList.push(null);
 		}
 
+		for(var i =0;i<json.width*json.height;i++) {
+			newEventList.push(null)
+		}
+
 		// copy all of the temp events into a buffer
 		var eventBuffer = [];
-		for(var i =0;i<eventBufferSize && i<json.events.length;i++) {
+		for(var i =0;i<json.events.length;i++) {
 			if(json.events[i]!==null) {
 				eventBuffer.push(json.events[i]);
 			}
-		}
-
-		// copy remaining events as usual
-		for(var i = eventBufferSize + 1;i<json.events.length;i++) { // +1 to account for the RPG maker implicit null
-			newEventList.push(json.events[i]);
 		}
 
 		if(eventBuffer.length !== 0 && eventBuffer[eventBuffer.length -1].id >= eventBufferSize * warningThreshold) {
@@ -202,36 +145,15 @@
 			+ "\nPlease restart RPG maker to allow the formatter to commit changes.")
 		}
 
-		if(_maxUsers !== maxUsers) {
-			rewriteEventTable(newEventList, _maxUsers, maxUsers);
-		}
-
-		// find our first index.
-		var idx = eventBufferSize+userId;
-		var count = 0;
-		while(newEventList[idx + count * maxUsers] !== undefined && newEventList[idx + count * maxUsers] !== null) { //exceeds max events or it's empty
-			count+=1;
-		}
-
-		idx += count * maxUsers;
-		for(var i =0;i<eventBuffer.length;i++) {
-			// extend array if necessary
-			if(idx >= newEventList.length) {
-				for(var k=0;k<maxUsers;k++) {
-					newEventList.push(null);
-				}
-			}
-			newEventList[idx] = eventBuffer[i];
-			idx+=maxUsers;
+		for(const event of eventBuffer) {
+			const idx = eventBufferSize + event.y * json.width + event.x
+			newEventList[idx] = event;
+			event.id = idx; 
 		}
 
 		newEventList.splice(0,0,null); // all RPG maker event lists start with null for some reason
 
-		// remap event ids and stringify
 		for(var i =0;i<newEventList.length;i++) {
-			if(newEventList[i]!==null) {
-				newEventList[i].id = i;
-			}
 			newEventList[i] = JSON.stringify(newEventList[i])
 		}
 
@@ -358,111 +280,11 @@
 			console.log("Formatted "+total+" files in "+time+" ms");
 		}
 	}
-
-	let makeIdentifier = function() {
-
-		var num = NaN;
-		while(isNaN(num) || num === 0) { // 0 for cancelled
-			num = Number(prompt("Please enter a unique ID in the range [1, "+String(maxUsers)+"]"));
-		}
-
-		var contents = String(num);
-
-		fs.writeFileSync(identifierPath, contents);
-	}
-
-	let checkUserId = function() {
-		if(!fs.existsSync(identifierPath)) {
-			makeIdentifier();
-		}
-
-		userId = Number(fs.readFileSync(identifierPath, {encoding:'utf8', flag:'r'}));
-	}
-
-	let makeSharedData = function() {
-		var contents = String(maxUsers);
-
-		fs.writeFileSync(sharedDataPath, contents);
-	}
-
-	let checkSharedData = function() {
-		if(!manageEvents) {
-			return
-		}
-		if(!fs.existsSync(sharedDataPath)) {
-			makeSharedData();
-		}
-
-		_maxUsers = Number(fs.readFileSync(sharedDataFilename, {encoding:'utf8', flag:'r'}));
-	}
-
-	let makeGitignore = function() {
-		fs.writeFileSync(gitignorePath, identifierFilename)
-	}
-
-	let checkGitignore = function() {
-
-		// first, check if we're even in a git repo.
-		if(!fs.existsSync(gitpath)) {
-			return;
-		}
-
-		// check if a .gitignore file exists.
-		if(!fs.existsSync(gitignorePath)) {
-			makeGitignore();
-			return;
-		}
-		var gitignore = fs.readFileSync(gitignorePath, {encoding:'utf8', flag:'r'});
-
-		if(gitignore.indexOf(identifierFilename) === -1) {
-			gitignore+="\n"+identifierFilename;
-			fs.writeFileSync(gitignorePath, gitignore);
-		}
-	}
-
-	let checkIsChange = function() {
-		if(!manageEvents) {
-			return
-		}
-		if(_maxUsers > maxUsers) {
-			if(userId > maxUsers) {
-				alert("You cannot perform this operation. Reducing user count would delete events you own.");
-				window.close();
-				throw "Close";
-			}
-			if(!confirm("Decreasing max users will reassign all removed events to your user. \nAre you sure you want to continue?")) {
-				window.close();
-				throw "Close";
-			}
-			
-		}
-		if(_maxUsers !== maxUsers) {
-			if(!confirm("WARNING: You are attempting to change the max users ("+String(_maxUsers)+"->"+String(maxUsers)+")."
-			+"\n\nThis operation will completely re-write the event table which can cause merge conflicts or other errors."
-			+"\n\nIt is highly recommended to git commit right before doing this.\nAre you sure you want to continue?")) {
-				window.close()
-				throw "Close";
-			}
-		}
-	}
-
-	let writeSharedData = function() {
-		if(!manageEvents) {
-			return
-		}
-		var contents = String(maxUsers)
-		fs.writeFileSync(sharedDataPath, contents)
-	}
 	
 	let oldFunc = Scene_Boot.prototype.create
 	Scene_Boot.prototype.create = function() {
 		var start = window.performance.now();
-		checkUserId();
-		checkSharedData();
-		checkGitignore();
-		checkIsChange();
 		fmt();
-		writeSharedData();
 		if(debug) {
 			var time = window.performance.now()-start;
 			console.log("Total time taken: "+time+" ms");
