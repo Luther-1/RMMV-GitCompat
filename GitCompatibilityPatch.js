@@ -49,6 +49,11 @@
  * Be aware that event id numbers are changed by this plugin when
  * Manage Events is enabled.
  * 
+ * This plugin is not a silver bullet solution to git with RPG maker.
+ * Things like adding plugins, adjusting the database, and adding maps
+ * may still cause merge conflicts and errors. This plugin only serves 
+ * to mitigate common merge conflicts and make development easier.
+ * 
  */
 (function() {
 
