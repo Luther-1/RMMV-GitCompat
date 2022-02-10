@@ -281,7 +281,7 @@
 		// now we insert our JSON
 		components.push(getIndent(1)+"\"events\": [");
 		for(var i =0;i<events.length;i++) {
-			components.push(""); // helps git recognize sections
+			//components.push(""); // helps git recognize sections
 			components.push(getIndent(2) + events[i] + (i === events.length-1 ? "" : ","));
 		}
 		components.push(getIndent(1)+"]");
