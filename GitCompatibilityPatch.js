@@ -446,11 +446,6 @@
 		}
 	}
 
-	let writeUserId = function() {
-		var contents = String(userId)
-		fs.writeFileSync(identifierPath, contents)
-	}
-
 	let writeSharedData = function() {
 		if(!manageEvents) {
 			return
@@ -467,7 +462,6 @@
 		checkGitignore();
 		checkIsChange();
 		fmt();
-		writeUserId();
 		writeSharedData();
 		if(debug) {
 			var time = window.performance.now()-start;
