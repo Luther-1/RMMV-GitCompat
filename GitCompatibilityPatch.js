@@ -25,6 +25,14 @@
  * @type boolean
  * @on Yes
  * @off No
+ * @default true   
+ * 
+ * 
+ * @param Manage Events
+ * @desc Manages the event table to allow multiple users to work on events on the same map.
+ * @type boolean
+ * @on Yes
+ * @off No
  * @default true  
  * 
  * @param Max Users
@@ -71,6 +79,7 @@
     var formatAll = parameters["Format All"] === 'true';
     var debug = parameters["Debug"] === 'true';
     var removeRPG = parameters["Remove RPG Maker Data"] === 'true';
+    var manageEvents = parameters["Manage Events"] === 'true';
 	var maxUsers = Number(parameters["Max Users"]);
 	var _maxUsers = -1;
 
@@ -284,14 +293,19 @@
 	let formatJson = function(filepath) {
 		var file = fs.readFileSync(filepath, {encoding:'utf8', flag:'r'});
 		var json = JSON.parse(file);
-		events = preprocessMap(filepath, json);
+		if(manageEvents) {
+			var events = preprocessMap(filepath, json);
+		}
 		if(removeRPG) {
 			replacer = getReplacerFor(filepath);
 			var formatted = JSON.stringify(json, replacer, jsonIndentSpaces);
 		} else {
 			var formatted = JSON.stringify(json, null, jsonIndentSpaces);
 		}
-		formatted = insertMapEventData(formatted, events);
+		if(manageEvents) {
+			formatted = insertMapEventData(formatted, events);
+		}
+		
 		
 
 		if(formatted === file) {
@@ -372,6 +386,9 @@
 	}
 
 	let checkSharedData = function() {
+		if(!manageEvents) {
+			return
+		}
 		if(!fs.existsSync(sharedDataPath)) {
 			makeSharedData();
 		}
@@ -404,6 +421,9 @@
 	}
 
 	let checkIsChange = function() {
+		if(!manageEvents) {
+			return
+		}
 		if(_maxUsers > maxUsers) {
 			if(userId > maxUsers) {
 				alert("You cannot perform this operation. Reducing user count would delete events you own.");
@@ -418,7 +438,7 @@
 		}
 		if(_maxUsers !== maxUsers) {
 			if(!confirm("WARNING: You are attempting to change the max users ("+String(_maxUsers)+"->"+String(maxUsers)+")."
-			+"\n\nThis operation will completely re-write the event table which will cause merge conflicts or other errors."
+			+"\n\nThis operation will completely re-write the event table which can cause merge conflicts or other errors."
 			+"\n\nIt is highly recommended to git commit right before doing this.\nAre you sure you want to continue?")) {
 				window.close()
 				throw "Close";
@@ -432,6 +452,9 @@
 	}
 
 	let writeSharedData = function() {
+		if(!manageEvents) {
+			return
+		}
 		var contents = String(maxUsers)
 		fs.writeFileSync(sharedDataPath, contents)
 	}
