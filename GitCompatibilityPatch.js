@@ -21,33 +21,59 @@
  * @default false 
  * 
  * @param Remove RPG Maker Data
- * @desc Attempts to zero out data that is unique to each user.
+ * @desc Attempts to zero out data such as camera location and map id that is unique to each user.
  * @type boolean
  * @on Yes
  * @off No
- * @default true    
+ * @default true
  * 
  * @param Expand Map Groups
  * @desc Whether or not to default map groups to expanded or collapsed. Does nothing if Remove RPG Maker Data is false.
  * @type boolean
  * @on Yes
  * @off No
- * @default true   
+ * @default true
  * 
  * @param Manage Events
  * @desc Manages the event table to allow multiple users to work on events on the same map.
  * @type boolean
  * @on Yes
  * @off No
- * @default true   
+ * @default true
+ * 
+ * @param Blacklist
+ * @desc File names that the plugin should not process (case insensitive).
+ * @type text[]
+ * @default ["commonevents.json","plugins.js"]
  *
- * @help This plugin alters files on the hard drive every time the game is run.
+ * @help READ THIS FULLY. This plugin is essentially a hack and has some caveats.
+ * 
+ * This plugin alters files on the hard drive every time the game is run.
  * It does NOT extend the editor's functionality, as a result
  * saving RPG maker will reset all the changes that this plugin makes.
  * Always run a playtest right before closing RPG maker to keep the changes!
  * 
+ * As long as changes made by people (tiles, events) are mostly local to one
+ * area of the map, git should be able to merge automatically in most cases.
+ * 
+ * Gitkraken's diff tool by default is unable to correctly diff the JSONS.
+ * In the event of a merge conflcit. Use a tool such as VSCode 
+ * (just open the file during a conflict) to do the diff.
+ * 
  * Be aware that event id numbers are changed by this plugin when
  * Manage Events is enabled.
+ * 
+ * It is recommended to add the following files to your gitignore:
+ *     save/*
+ * 
+ * Creating maps will always cause a merge conflict when two people
+ * make a map as RPG maker will automatically assign the same
+ * internal index to the maps. The plugin gets around this using
+ * map identifiers. Append "::<unique_numerical_inex>" to your map name to
+ * make the plugin change your map's internal index. Ex: To assign MyMap to
+ * index 100, change the name from "MyMap" to "MyMap::100" The index must
+ * be in the range 1 - 999. After applying the change, restart RPG maker.
+ * 
  * 
  * This plugin is not a silver bullet solution to git with RPG maker.
  * Things like adding plugins, adjusting the database, and adding maps
@@ -63,10 +89,18 @@
     var removeRPG = parameters["Remove RPG Maker Data"] === 'true';
     var expandMapGroups = parameters["Expand Map Groups"] === 'true';
     var manageEvents = parameters["Manage Events"] === 'true';
+	try {
+		var userBlacklist = JSON.parse(parameters["Blacklist"])
+	} catch(e) {
+		console.error("User blacklist malformed. ("+e+")");
+		var userBlacklist = [];
+	}
+
+	var globalQuit = false;
 
 	if(!Utils.isOptionValid('test')) {
 		if(debug) {
-			console.log("Test mode inactive. GitCompatabilityPatch will not run.")
+			console.log("Test mode is inactive. GitCompatabilityPatch will not run.")
 		}
 		return; // do nothing if it's not test
 	}
@@ -83,9 +117,16 @@
 
 	const blacklist = [".git"];
 
+	for(const item of userBlacklist) {
+		blacklist.push(item.toLowerCase());
+	}
+
 	const systemReplacer = function(key, value) {
 		if(key === "versionId") {
 			return 0;
+		}
+		if(key === "editMapId") {
+			return 1;
 		}
 		return value;
 	}
@@ -133,7 +174,7 @@
 		// the list to actually be written
 		var newEventList = [];
 
-		for(var i =0;i<json.width*json.height + 1;i++) {
+		for(var i =0;i<json.width*json.height + 1;i++) { // RPG maker has an implicit null at the start of the events list.
 			newEventList.push(null)
 		}
 
@@ -251,8 +292,12 @@
 		var total = 0;
 
 		for(const file of files) {
+			if(blacklist.includes(file.toLowerCase())) {
+				console.log("Skipping blacklisted file \""+file+"\"");
+				continue;
+			}
 			let combined = path.join(dir,file)
-			if(fs.statSync(combined).isDirectory() && blacklist.indexOf(file.toLowerCase()) === -1) {
+			if(fs.statSync(combined).isDirectory()) {
 				total += formatJsonRecurse(combined);
 			} else {
 				if(combined.toLowerCase().endsWith(".json")) {
@@ -264,29 +309,146 @@
 		return total;
 	}
 
+	let extractMappings = function(mapinfo) {
+		var mappings = [];
+		const maxMaps = 999;
+
+		for(const map of mapinfo) {
+			if(map === null) {
+				continue;
+			}
+
+			var match = /(::(\d+))$/.exec(map.name);
+			if(match == null) {
+				continue;
+			}
+			var number = Number(match[2])
+
+			if(isNaN(number) || number < 1 || number > maxMaps) {
+				console.error("Map "+map.name+" has invalid index of "+String(number)+" (parsed: "+match[2]+")");
+				continue;
+			}
+
+			mappings.push({map:map,fromIndex:map.id,toIndex:number});
+		}
+
+		return mappings;
+	}
+
+	let rewriteMapFiles = function(mapinfo, mappings) {
+		const updateMapIndex = function(array, from, to) {
+			array[to] = newData[from];
+			array[from] = null;
+			array[to].id = to;
+		}
+
+		var newData = [];
+		for(var i =0;i<1000;i++) {
+			newData.push(null);
+		}
+
+		for(const map of mapinfo) {
+			if(map !== null) {
+				newData[map.id] = map;
+			}
+		}
+
+		var changed = false;
+		var error = "";
+
+		for(const mapping of mappings) {
+			if(mapping.fromIndex === mapping.toIndex) {
+				continue;
+			}
+
+			var srcFile = "./data/Map"+String(mapping.fromIndex).padStart(3,'0')+".json";
+			var dstFile = "./data/Map"+String(mapping.toIndex).padStart(3,'0')+".json";
+
+			if(newData[mapping.toIndex] !== null) {
+				var error = "Cannot remap \""+newData[mapping.fromIndex].name 
+				+ "\" ("+String(mapping.fromIndex)+"->"+String(mapping.toIndex)+"). Already occupied by \""+newData[mapping.toIndex].name+"\"";
+				continue;
+			}
+
+			if(!fs.existsSync(srcFile)) {
+				if(debug) {
+					console.log("No Changes in file \""+srcFile+"\". Ignoring");
+				}
+				changed = true;
+				updateMapIndex(newData,mapping.fromIndex,mapping.toIndex)
+				continue;
+			}
+
+			if(debug) {
+				console.log("Remapping map \""+srcFile.substring(srcFile.lastIndexOf("/"))+"\" to \""+dstFile.substring(dstFile.lastIndexOf("/"))+"\"");
+			}
+			
+			if(fs.existsSync(dstFile)) {
+				fs.unlinkSync(dstFile);
+			}
+			fs.renameSync(srcFile,dstFile);
+
+			changed = true;
+			updateMapIndex(newData,mapping.fromIndex,mapping.toIndex)
+		}
+
+		if(changed) {
+			alert("Map files have changed on disk. Please reload the project for the changes to take effect.")
+			globalQuit = true;
+		}
+
+		if(error.length !== 0) {
+			alert(error);
+			globalQuit=true;
+		}
+		return newData;
+	}
+
+	let formatMaps = function() {
+		const mapInfosPath = "./data/MapInfos.json";
+		var mapinfo = JSON.parse(fs.readFileSync(mapInfosPath, {encoding:'utf8', flag:'r'}))
+		var mappings = extractMappings(mapinfo)
+		
+		var newData = rewriteMapFiles(mapinfo, mappings);
+
+		var fileContents = ["["];
+		for(var i =0;i<newData.length;i++) {
+			var contents = getIndent(1) + JSON.stringify(newData[i]) + (i === newData.length-1 ? "" : ",");
+			fileContents.push(contents);
+		}
+		fileContents.push("]");
+
+		var mapJSON = fileContents.join("\n");
+		fs.writeFileSync(mapInfosPath,mapJSON)
+	}
+
 	let fmt = function() {
+		globalMapsData = {};
 		var total = 0;
 		var start = window.performance.now();
+
 		if(formatAll) {
 			total = formatJsonRecurse("./");
 		} else {
 			total = formatJsonRecurse("./data")
 		}
 
+		formatMaps();
+
 		if(debug) {
 			var time = window.performance.now()-start;
-			console.log("Formatted "+total+" files in "+time+" ms");
+			console.log("Updated "+total+" files in "+time+" ms");
+		}
+
+		if(globalQuit) {
+			window.close();
+			throw "GitCompatabilityPatch close";
 		}
 	}
 	
 	let oldFunc = Scene_Boot.prototype.create
 	Scene_Boot.prototype.create = function() {
-		var start = window.performance.now();
 		fmt();
-		if(debug) {
-			var time = window.performance.now()-start;
-			console.log("Total time taken: "+time+" ms");
-		}
 		oldFunc.call(this);
 	}
 
