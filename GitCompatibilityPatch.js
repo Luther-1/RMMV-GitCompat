@@ -39,6 +39,13 @@
  * @type boolean
  * @on Yes
  * @off No
+ * @default true 
+ * 
+ * @param Disable Indentation
+ * @desc Disables indentation on JSON files to save space.
+ * @type boolean
+ * @on Yes
+ * @off No
  * @default true
  * 
  * @param Blacklist
@@ -89,6 +96,7 @@
     var removeRPG = parameters["Remove RPG Maker Data"] === 'true';
     var expandMapGroups = parameters["Expand Map Groups"] === 'true';
     var manageEvents = parameters["Manage Events"] === 'true';
+	var disableIndentation = parameters["Disable Indentation"] === 'true';
 	try {
 		var userBlacklist = JSON.parse(parameters["Blacklist"])
 	} catch(e) {
@@ -113,9 +121,9 @@
 	const fs = require('fs');
 	const path = require('path');
 
-	const jsonIndentSpaces = 2;
+	const jsonIndentSpaces = disableIndentation ? 0 : 2;
 
-	const blacklist = [".git"];
+	const blacklist = [".git","mapinfos.json"];
 
 	for(const item of userBlacklist) {
 		blacklist.push(item.toLowerCase());
@@ -135,6 +143,7 @@
 		return value;
 	}
 
+	// unused since it's blacklisted
 	const mapInfosReplacer = function(key, value) {
 		if(key === "scrollX" || key === "scrollY") {
 			return 0;
@@ -335,6 +344,49 @@
 		return mappings;
 	}
 
+	let fixMapReferences = function(mappings) {
+		var mappingArray = [];
+		for(var i =0;i<1000;i++) {
+			mappingArray.push(i);
+		}
+		for(const mapping of mappings) {
+			mappingArray[mapping.fromIndex] = mappingArray.toIndex;
+		}
+
+		// now load all the maps and try to fixup anything that references a map
+		const baseDir = "./data"
+		var files = fs.readdirSync(baseDir);
+		for(const file of files) {
+			if(!isMap(file)) {
+				continue;
+			}
+
+			const fullpath = path.join(baseDir,file);
+
+			if(debug) {
+				console.log("Fixing transfers for "+file);
+			}
+
+			var map = JSON.parse(fs.readFileSync(fullpath, {encoding:'utf8', flag:'r'}))
+			var events = map.events;
+			for(const event of events) {
+				if(event === null) {
+					continue;
+				}
+				for(const page of event.pages) {
+					for(const item of page.list) {
+						// map transfer
+						if(item.code === 201) {
+							item.parameters[1] = mappingArray[item.parameters[1]];
+						}
+					}
+				}
+			}
+
+			fs.writeFileSync(fullpath, JSON.stringify(map, null, 2));
+		}
+	}
+
 	let rewriteMapFiles = function(mapinfo, mappings) {
 		const updateMapIndex = function(array, from, to) {
 			array[to] = newData[from];
@@ -392,21 +444,36 @@
 			updateMapIndex(newData,mapping.fromIndex,mapping.toIndex)
 		}
 
-		if(changed) {
-			alert("Map files have changed on disk. Please reload the project for the changes to take effect.")
-			globalQuit = true;
-		}
-
 		if(error.length !== 0) {
 			alert(error);
 			globalQuit=true;
 		}
+		else if(changed) {
+			fixMapReferences(mappings);
+			alert("Map files have changed on disk. Please reload the project for the changes to take effect.")
+			globalQuit = true;
+		}
 		return newData;
+	}
+
+	let formatMapinfoEntries = function(mapinfo) {
+		if(!removeRPG) {
+			return;
+		}
+		for(const map of mapinfo) {
+			if(map === null) {
+				continue;
+			}
+			map.scrollX = 0;
+			map.scrollY = 0;
+			map.expanded = expandMapGroups;
+		}
 	}
 
 	let formatMaps = function() {
 		const mapInfosPath = "./data/MapInfos.json";
 		var mapinfo = JSON.parse(fs.readFileSync(mapInfosPath, {encoding:'utf8', flag:'r'}))
+		formatMapinfoEntries(mapinfo);
 		var mappings = extractMappings(mapinfo)
 		
 		var newData = rewriteMapFiles(mapinfo, mappings);
@@ -427,13 +494,13 @@
 		var total = 0;
 		var start = window.performance.now();
 
+		formatMaps();
+
 		if(formatAll) {
 			total = formatJsonRecurse("./");
 		} else {
 			total = formatJsonRecurse("./data")
 		}
-
-		formatMaps();
 
 		if(debug) {
 			var time = window.performance.now()-start;
