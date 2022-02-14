@@ -39,14 +39,14 @@
  * @type boolean
  * @on Yes
  * @off No
- * @default true 
+ * @default true  
  * 
  * @param Disable Indentation
- * @desc Disables indentation on JSON files to save space.
+ * @desc Disables indentation for the formatted JSONS, reducing file size at the cost of increased save time.
  * @type boolean
  * @on Yes
  * @off No
- * @default true
+ * @default true 
  * 
  * @param Blacklist
  * @desc File names that the plugin should not process (case insensitive).
@@ -96,7 +96,7 @@
     var removeRPG = parameters["Remove RPG Maker Data"] === 'true';
     var expandMapGroups = parameters["Expand Map Groups"] === 'true';
     var manageEvents = parameters["Manage Events"] === 'true';
-	var disableIndentation = parameters["Disable Indentation"] === 'true';
+    var disableIndentation = parameters["Disable Indentation"] === 'true';
 	try {
 		var userBlacklist = JSON.parse(parameters["Blacklist"])
 	} catch(e) {
@@ -121,7 +121,7 @@
 	const fs = require('fs');
 	const path = require('path');
 
-	const jsonIndentSpaces = disableIndentation ? 0 : 2;
+	const jsonIndentSpaces = 1;
 
 	const blacklist = [".git","mapinfos.json"];
 
@@ -129,7 +129,18 @@
 		blacklist.push(item.toLowerCase());
 	}
 
-	const systemReplacer = function(key, value) {
+	let writeJSONConfigured = function(file, json) {
+		if(disableIndentation) {
+			json = json.split("\n");
+			for(var i =0;i<json.length;i++) {
+				json[i] = json[i].trimLeft();
+			}
+			json = json.join("\n");
+		}
+		fs.writeFileSync(file, json)
+	}
+
+	let systemReplacer = function(key, value) {
 		if(key === "versionId") {
 			return 0;
 		}
@@ -139,12 +150,12 @@
 		return value;
 	}
 	
-	const mapReplacer = function(key, value) {
+	let mapReplacer = function(key, value) {
 		return value;
 	}
 
 	// unused since it's blacklisted
-	const mapInfosReplacer = function(key, value) {
+	let mapInfosReplacer = function(key, value) {
 		if(key === "scrollX" || key === "scrollY") {
 			return 0;
 		}
@@ -287,7 +298,7 @@
 			if(debug) {
 				console.log("Formatting \""+filepath+"\"");
 			}
-			fs.writeFileSync(filepath, formatted);
+			writeJSONConfigured(filepath, formatted);
 			return 1;
 		}
 		
@@ -302,7 +313,9 @@
 
 		for(const file of files) {
 			if(blacklist.includes(file.toLowerCase())) {
-				console.log("Skipping blacklisted file \""+file+"\"");
+				if(debug) {
+					console.log("Skipping blacklisted file \""+file+"\"");
+				}
 				continue;
 			}
 			let combined = path.join(dir,file)
@@ -383,7 +396,7 @@
 				}
 			}
 
-			fs.writeFileSync(fullpath, JSON.stringify(map, null, 2));
+			writeJSONConfigured(fullpath, JSON.stringify(map, null, jsonIndentSpaces))
 		}
 	}
 
@@ -486,7 +499,7 @@
 		fileContents.push("]");
 
 		var mapJSON = fileContents.join("\n");
-		fs.writeFileSync(mapInfosPath,mapJSON)
+		writeJSONConfigured(mapInfosPath,mapJSON)
 	}
 
 	let fmt = function() {
