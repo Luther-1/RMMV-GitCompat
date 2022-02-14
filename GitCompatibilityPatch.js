@@ -121,7 +121,7 @@
 	const fs = require('fs');
 	const path = require('path');
 
-	const jsonIndentSpaces = disableIndentation ? null : 2;
+	const jsonIndentSpaces = disableIndentation ? 0 : 2;
 
 	const blacklist = [".git","mapinfos.json"];
 
@@ -212,7 +212,7 @@
 	// quick and dirty indenting code
 	var indentCache = []; // will never exeed 2
 	var indent = "";
-	for(var i =0;jsonIndentSpaces !== null && i<jsonIndentSpaces;i++) {
+	for(var i =0;i<jsonIndentSpaces;i++) {
 		indent+=" ";
 	}
 	for(var i =0;i<5;i++) {
@@ -268,9 +268,9 @@
 		}
 		if(removeRPG) {
 			replacer = getReplacerFor(filepath);
-			var formatted = JSON.stringify(json, replacer, jsonIndentSpaces);
+			var formatted = JSON.stringify(json, replacer, jsonIndentSpaces !== 0 ? jsonIndentSpaces : "");
 		} else {
-			var formatted = JSON.stringify(json, null, jsonIndentSpaces);
+			var formatted = JSON.stringify(json, null, jsonIndentSpaces !== 0 ? jsonIndentSpaces : "");
 		}
 		if(manageEvents) {
 			formatted = insertMapEventData(formatted, events);
