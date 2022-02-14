@@ -363,7 +363,7 @@
 			mappingArray.push(i);
 		}
 		for(const mapping of mappings) {
-			mappingArray[mapping.fromIndex] = mappingArray.toIndex;
+			mappingArray[mapping.fromIndex] = mapping.toIndex;
 		}
 
 		// now load all the maps and try to fixup anything that references a map
