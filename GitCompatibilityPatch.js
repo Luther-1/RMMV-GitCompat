@@ -121,7 +121,7 @@
 	const fs = require('fs');
 	const path = require('path');
 
-	const jsonIndentSpaces = disableIndentation ? 0 : 2;
+	const jsonIndentSpaces = disableIndentation ? null : 2;
 
 	const blacklist = [".git","mapinfos.json"];
 
@@ -212,7 +212,7 @@
 	// quick and dirty indenting code
 	var indentCache = []; // will never exeed 2
 	var indent = "";
-	for(var i =0;i<jsonIndentSpaces;i++) {
+	for(var i =0;jsonIndentSpaces !== null && i<jsonIndentSpaces;i++) {
 		indent+=" ";
 	}
 	for(var i =0;i<5;i++) {
