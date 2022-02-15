@@ -51,7 +51,7 @@
  * @param Blacklist
  * @desc File names that the plugin should not process (case insensitive).
  * @type text[]
- * @default ["commonevents.json","plugins.js"]
+ * @default ["actors.json", "animations.json", "armors.json", "classes.json", "commonevents.json", "skills.json", "states.json", "tilesets.json", "troops.json", "weapons.json"]
  *
  * @help READ THIS FULLY. This plugin is essentially a hack and has some caveats.
  * 
@@ -517,7 +517,7 @@
 
 		if(debug) {
 			var time = window.performance.now()-start;
-			console.log("Updated "+total+" files in "+time+" ms");
+			console.log("Updated", total, "files in", time, "ms");
 		}
 
 		if(globalQuit) {
