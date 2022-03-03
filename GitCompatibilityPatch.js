@@ -185,6 +185,52 @@
 		return null;
 	}
 
+	let updateEventParameterIndex = function(eventMappings, param) {
+		if(param <= 0) { // -1 for player, 0 for this event
+			return param
+		}
+		return eventMappings[param] || param;
+	}
+
+	let updateEventReferences = function(eventMappings, eventBuffer) {
+		for(const event of eventBuffer) {
+			if(event === null) {
+				continue;
+			}
+			for(const page of event.pages) {
+				for(const item of page.list) {
+					switch(item.code) {
+						case 111: // conditional branch
+							if(item.parameters[0] === 6) { // game data op and character ref
+								item.parameters[1] = updateEventParameterIndex(eventMappings, item.parameters[1])
+							}
+							break;
+						case 122: // control variables
+							if(item.parameters[3] === 3 && item.parameters[4] === 5) { // game data op and character ref
+								item.parameters[5] = updateEventParameterIndex(eventMappings, item.parameters[5])
+							}
+							break;
+						case 203: // set event location
+							item.parameters[0] = updateEventParameterIndex(eventMappings, item.parameters[0])
+							if(item.parameters[1] !== 0 && item.parameters[1] !== 1) { // exchange with another event
+								item.parameters[2] = updateEventParameterIndex(eventMappings, item.parameters[2])
+							}
+							break;
+						case 205: // set movement route
+							item.parameters[0] = updateEventParameterIndex(eventMappings, item.parameters[0])
+							break;
+						case 212: // show animation
+							item.parameters[0] = updateEventParameterIndex(eventMappings, item.parameters[0])
+							break;
+						case 213: // show balloon
+							item.parameters[0] = updateEventParameterIndex(eventMappings, item.parameters[0])
+							break;
+					}
+				}
+			}
+		}
+	}
+
 	let preprocessMap = function(filepath, json) {
 		filename = path.basename(filepath);
 		if(!isMap(filename)) {
@@ -206,10 +252,20 @@
 			}
 		}
 
+		eventMappings = {}
+		eventsChanged = false;
 		for(const event of eventBuffer) {
 			const idx = event.y * json.width + event.x + 1
 			newEventList[idx] = event;
-			event.id = idx; 
+			if(event.id !== idx) {
+				eventMappings[event.id] = idx;
+				event.id = idx;
+				eventsChanged = true;
+			}
+		}
+
+		if(eventsChanged) {
+			updateEventReferences(eventMappings, newEventList);
 		}
 
 		for(var i =0;i<newEventList.length;i++) {
