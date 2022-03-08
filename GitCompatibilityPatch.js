@@ -68,7 +68,7 @@
  * @param Blacklist
  * @desc File names that the plugin should not process (case insensitive).
  * @type text[]
- * @default ["actors.json", "animations.json", "armors.json", "classes.json", "commonevents.json", "skills.json", "states.json", "tilesets.json", "troops.json", "weapons.json"]
+ * @default ["actors.json", "animations.json", "armors.json", "classes.json", "commonevents.json", "enemies.json", "items.json", "skills.json", "states.json", "tilesets.json", "troops.json", "weapons.json"]
  *
  * @help READ THIS FULLY. This plugin is essentially a hack and has some caveats.
  * 
@@ -146,7 +146,7 @@
 		blacklist.push(item.toLowerCase());
 	}
 
-	let writeJSONConfigured = function(file, json) {
+	let prepareJsonForSave = function(json) {
 		if(disableIndentation) {
 			json = json.split("\n");
 			for(var i =0;i<json.length;i++) {
@@ -154,6 +154,11 @@
 			}
 			json = json.join("\n");
 		}
+		return json;
+	}
+
+	let writeJSONConfigured = function(file, json) {
+		json = prepareJsonForSave(json)
 		fs.writeFileSync(file, json)
 	}
 
@@ -359,11 +364,12 @@
 		if(manageEvents) {
 			formatted = insertMapEventData(formatted, events);
 		}
-		
-		
 
+		formatted = prepareJsonForSave(formatted)
+		
 		if(formatted === file) {
 			if(debug) {
+				// this is a lie because all the work is already done, but it looks nice in the console.
 				console.log("No changes in file \""+filepath+"\". Ignoring");
 			}
 			return 0;
@@ -371,7 +377,7 @@
 			if(debug) {
 				console.log("Formatting \""+filepath+"\"");
 			}
-			writeJSONConfigured(filepath, formatted);
+			fs.writeFileSync(filepath, formatted)
 			return 1;
 		}
 		
