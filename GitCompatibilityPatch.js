@@ -357,9 +357,9 @@
 		}
 		if(removeRPG) {
 			replacer = getReplacerFor(filepath);
-			var formatted = JSON.stringify(json, replacer, jsonIndentSpaces !== 0 ? jsonIndentSpaces : "");
+			var formatted = JSON.stringify(json, replacer, jsonIndentSpaces);
 		} else {
-			var formatted = JSON.stringify(json, null, jsonIndentSpaces !== 0 ? jsonIndentSpaces : "");
+			var formatted = JSON.stringify(json, null, jsonIndentSpaces);
 		}
 		if(manageEvents) {
 			formatted = insertMapEventData(formatted, events);
